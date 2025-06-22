@@ -79,47 +79,57 @@ def process_images(image_folder, output_folder):
         # Check for image files only
         filename = 'page_' + str(indx+1) + '.png'
         image_path = os.path.join(image_folder, filename)
-        last_image_number = split_and_save_image(image_path, output_folder, last_image_number)
 
-# Function to process bounding boxes
-def process_bounding_boxes(file_path):
-    with open(file_path, "r") as file:
-        lines = file.readlines()
-
-    # Parse bounding box coordinates
+def process_bounding_boxes(file_path, vertical_threshold=10):
+    """
+    Parses bounding boxes from a .txt file, groups them line-by-line, and sorts left to right.
+    """
     bounding_boxes = []
-    for line in lines:
-        coords = list(map(int, line.strip().split(',')))
-        bounding_boxes.append(coords)
 
-    # Sort bounding boxes based on y_min value
-    bounding_boxes.sort(key=lambda box: box[1])
+    with open(file_path, "r") as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue  # skip empty lines
+            try:
+                coords = list(map(float, line.split(',')))  # ✅ USE float
+                if len(coords) != 8:
+                    print(f"⚠️ Skipping malformed line: {line}")
+                    continue
+                pts = [[coords[i], coords[i + 1]] for i in range(0, 8, 2)]
+                bounding_boxes.append(pts)
+            except ValueError:
+                print(f"⚠️ Could not parse line: {line}")
+                continue
 
-    vertical_distance_between_lines = 10   #Change it according to the dataset, you are using
-    # Group bounding boxes based on difference between max and min y_min values
+    # Sort top-to-bottom using average y
+    bounding_boxes.sort(key=lambda box: sum(pt[1] for pt in box) / 4.0)
+
+    # Group boxes into lines by vertical proximity
     grouped_boxes = []
     current_group = []
+
     for box in bounding_boxes:
+        box_y = sum(pt[1] for pt in box) / 4.0
         if not current_group:
             current_group.append(box)
         else:
-            min_y = min(current_group, key=lambda x: x[1])[1]
-            max_y = max(current_group, key=lambda x: x[1])[1]
-            if box[1] - min_y <= vertical_distance_between_lines:
+            group_y = sum(pt[1] for pt in current_group[0]) / 4.0
+            if abs(box_y - group_y) <= vertical_threshold:
                 current_group.append(box)
             else:
                 grouped_boxes.append(current_group)
                 current_group = [box]
 
-    # Append the last group
     if current_group:
         grouped_boxes.append(current_group)
 
-    # Sort each group based on x_min value
+    # Sort each group left to right using average x
     for group in grouped_boxes:
-        group.sort(key=lambda box: box[0])
+        group.sort(key=lambda box: sum(pt[0] for pt in box) / 4.0)
 
     return grouped_boxes
+
 
 def sort_bounding_boxes(input_directory, output_directory):
     # Iterate over each text file in the directory
