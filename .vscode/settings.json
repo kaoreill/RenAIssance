@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./RenAIssance_CRNN_OCR_Kate_OReilly/CRAFT-pytorch"
+    ]
+}
