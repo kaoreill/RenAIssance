@@ -50,7 +50,7 @@ Install submodule-specific dependencies:
 
 ```bash
 pip install -r CRAFTModel/requirements.txt
-
+```
 
 ### Training
 
