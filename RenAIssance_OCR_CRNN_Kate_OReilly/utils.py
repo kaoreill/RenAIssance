@@ -11,6 +11,7 @@ from natsort import natsorted
 import string
 import re
 from natsort import natsorted
+from pdf2image import convert_from_path
 
 # ------------------ File and Text Utilities ------------------
 def count_files_in_folder(folder_path, extensions_list):
@@ -109,7 +110,7 @@ def pad_and_resize_images(folder_path):
                         padded_img = img
 
                     # Resize
-                    resized_img = padded_img.resize((target_width, target_height), Image.ANTIALIAS)
+                    resized_img = padded_img.resize((target_width, target_height), Image.Resampling.LANCZOS)
                     resized_img.save(file_path)
                     processed_count += 1
                     print(f"Processed: {file_path}")
@@ -283,6 +284,27 @@ def run_full_preprocessing_pipeline(
         print(f"Saved preprocessed image: {output_path.name}")
 
     print("Full preprocessing pipeline complete.")
+def invert_images_in_folder(input_folder, output_folder=None):
+    """
+    Inverts black and white pixels in all images in a folder.
+    
+    Parameters:
+        input_folder (str): Path to the folder containing input images.
+        output_folder (str or None): Where to save inverted images. If None, overwrites original files.
+    """
+    os.makedirs(output_folder or input_folder, exist_ok=True)
+    
+    for filename in os.listdir(input_folder):
+        if filename.lower().endswith((".png", ".jpg", ".jpeg", ".tiff", ".bmp")):
+            img_path = os.path.join(input_folder, filename)
+            try:
+                img = Image.open(img_path).convert("L")  # Convert to grayscale
+                inverted = ImageOps.invert(img)
+                save_path = os.path.join(output_folder or input_folder, filename)
+                inverted.save(save_path)
+                print(f"Inverted: {filename}")
+            except Exception as e:
+                print(f"Failed to process {filename}: {e}")
 
 # ------------------ Ground Truth & Transcription ------------------
 def extract_ground_truth_for_dataset(
@@ -309,6 +331,54 @@ def extract_ground_truth_for_dataset(
     with open(output_path, "w", encoding="utf-8") as file:
         file.write(extracted_text)
     print(f"Ground truth text saved to {output_path}")
+    """
+    Extracts word regions from images based on bounding box coordinates in .txt files.
+    
+    Args:
+        image_folder (str): Path to folder containing images.
+        box_folder (str): Path to folder containing box coordinate files.
+        output_folder (str): Path to folder to save cropped word images.
+        box_format (str): File extension of box files (default is 'txt').
+    """
+    os.makedirs(output_folder, exist_ok=True)
+
+    image_paths = sorted(Path(image_folder).glob("*.png"))
+    for img_path in image_paths:
+        img_name = img_path.stem
+        box_path = Path(box_folder) / f"res_{img_name}{box_format}"
+        if not box_path.exists():
+            print(f"Box file not found for image: {img_path.name}")
+            continue
+
+        # Read image
+        image = cv2.imread(str(img_path))
+        if image is None:
+            print(f"Could not read image: {img_path.name}")
+            continue
+
+        # Read box coordinates
+        try:
+            with open(box_path, 'r', encoding='utf-8') as f:
+                lines = f.read().strip().splitlines()
+            for i, line in enumerate(lines):
+                coords = list(map(int, line.strip().replace(';', ' ').replace(',', ' ').split()))
+                if len(coords) == 4:
+                    x, y, w, h = coords
+                elif len(coords) == 8:
+                    xs = coords[0::2]
+                    ys = coords[1::2]
+                    x, y, w, h = min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)
+                else:
+                    print(f"Invalid box format in {box_path.name} line {i + 1}: {line}")
+                    continue
+                
+                word_crop = image[y:y+h, x:x+w]
+                output_path = Path(output_folder) / f"{img_name}_word_{i}.png"
+                cv2.imwrite(str(output_path), word_crop)
+        except Exception as e:
+            print(f"Failed to process {box_path.name}: {e}")
+
+    print("Word extraction completed.")
 
 # ------------------ Bounding Box Utilities ------------------
 def process_bounding_boxes(file_path):
@@ -545,6 +615,7 @@ def preview_extracted_words(folder: str, n: int = 8):
         plt.axis("off")
     plt.tight_layout()
     plt.show()
+
 # ------------------ Text Splitting ------------------
 def process_textfiles(textfile, sorted_BoundBox_folder, output_folder):
     """

@@ -50,7 +50,7 @@ Install submodule-specific dependencies:
 
 ```bash
 pip install -r CRAFTModel/requirements.txt
-```
+
 
 ### Training
 
@@ -100,7 +100,7 @@ Generates:
 - [PSENet](https://github.com/whai362/PSENet)  
 - [DBNet](https://github.com/MhLiao/DB)  
 
-Developed under the **RenAIssance** research initiative, and the **Google Summer of Code** program.
+Developed under the **RenAIssance** research initiative.
 
 ---
 
